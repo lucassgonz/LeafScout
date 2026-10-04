@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>LeafScout — Diagnose</title>
-<meta name="description" content="LeafScout's on-device crop disease diagnosis, running in the browser via TensorFlow.js — the same MobileNetV3 backbone and per-crop SVM heads as the mobile app." />
+<title>LeafScout Diagnose</title>
+<meta name="description" content="LeafScout's on-device crop disease diagnosis, running in the browser using the same MobileNetV3 model and per-crop SVM heads as the mobile app." />
 <style>
   :root {
     --bg: #f4f6f3; --card: #ffffff; --border: #d9e3da; --text: #1f3d2b;
@@ -83,8 +83,8 @@
   </nav>
 
   <h1>🌿 LeafScout</h1>
-  <p class="subtitle">Offline-capable crop disease diagnosis — this page runs the exact same MobileNetV3 + SVM pipeline as the mobile app, in your browser via TensorFlow.js.</p>
-  <div class="badge">Web port of the mobile app's on-device AI — not a separate, simplified demo</div>
+  <p class="subtitle">This page runs the same disease diagnosis as the mobile app, directly in your browser. It uses the same MobileNetV3 model and SVM classifier for each crop.</p>
+  <div class="badge">This is the mobile app's actual AI model, not a simplified demo</div>
 
   <div class="section-label">Crop</div>
   <div class="crop-row" id="cropRow"></div>
@@ -105,8 +105,8 @@
   <div class="sync-note" id="syncNote"></div>
 
   <footer>
-    Same backbone + SVM heads as the mobile app (see <code>model/README.md</code>). Diagnosis
-    runs entirely in your browser — the photo is never uploaded. Source:
+    This uses the same model as the mobile app (see <code>model/README.md</code>). The diagnosis
+    runs entirely in your browser, so your photo is never uploaded anywhere. Source code:
     <a href="https://github.com/lucassgonz/LeafScout" target="_blank" rel="noopener">github.com/lucassgonz/LeafScout</a>
   </footer>
 </div>
@@ -270,7 +270,7 @@ function renderResult(prediction, belowThreshold, info, coords) {
 
   if (belowThreshold) {
     el.resultInner.innerHTML = `
-      <div class="result-title warn">Not sure — ask a person</div>
+      <div class="result-title warn">Not sure. Ask a person.</div>
       <div class="result-body">Confidence is too low (${Math.round(prediction.confidence * 100)}%) to give a reliable diagnosis. Show this leaf to your extension officer instead.</div>`;
     return;
   }
@@ -321,7 +321,7 @@ async function saveAndSync(prediction, belowThreshold, coords) {
   };
   const { error } = await supabase.from('observations').upsert([row], { onConflict: 'id' });
   el.syncNote.textContent = error
-    ? 'Saved on this device only — could not reach the cooperative server.'
+    ? 'Saved on this device only. Could not reach the cooperative server.'
     : 'Synced to the cooperative dashboard.';
 }
 
@@ -352,7 +352,7 @@ async function init() {
   for (const d of diseaseRes.data || []) diseaseById[`${d.crop_id}:${d.id}`] = d;
 
   renderCrops();
-  el.status.textContent = 'Model loaded — pick a crop and a leaf photo.';
+  el.status.textContent = 'Model loaded. Pick a crop and a leaf photo.';
 
   el.dropZone.onclick = () => el.fileInput.click();
   el.fileInput.onchange = async (e) => {

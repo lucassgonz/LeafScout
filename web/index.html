@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>LeafScout — Cooperative Dashboard</title>
-<meta name="description" content="Extension officer / cooperative view of LeafScout crop disease observations — Small AI for Development Hackathon, Agriculture track." />
+<title>LeafScout Dashboard</title>
+<meta name="description" content="Extension officer and cooperative view of LeafScout crop disease observations, part of the Small AI for Development Hackathon agriculture track." />
 <style>
   :root {
     --bg: #f4f6f3;
@@ -41,8 +41,22 @@
     padding: 24px 16px 64px;
   }
   .wrap { max-width: 980px; margin: 0 auto; }
+  nav { display: flex; gap: 16px; margin-bottom: 20px; font-size: 0.85rem; }
+  nav a { color: var(--text-muted); text-decoration: none; }
+  nav a.active { color: var(--accent); font-weight: 700; }
   h1 { font-size: 1.8rem; margin: 0 0 4px; }
-  .subtitle { color: var(--text-muted); margin: 0 0 28px; font-size: 0.95rem; }
+  .subtitle { color: var(--text-muted); margin: 0 0 16px; font-size: 0.95rem; }
+  .cta {
+    display: inline-block;
+    background: var(--accent);
+    color: #fff;
+    text-decoration: none;
+    font-weight: 700;
+    font-size: 0.9rem;
+    padding: 10px 18px;
+    border-radius: 999px;
+    margin-bottom: 28px;
+  }
   .stat-row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -117,8 +131,14 @@
 </head>
 <body>
   <div class="wrap">
+    <nav>
+      <a href="index.html" class="active">Cooperative dashboard</a>
+      <a href="app.html">Diagnose a leaf</a>
+    </nav>
+
     <h1>🌿 LeafScout</h1>
-    <p class="subtitle">Cooperative / extension officer view — live observations synced from the field app. Small AI for Development Hackathon, Agriculture track.</p>
+    <p class="subtitle">This is the cooperative and extension officer view. It shows live observations synced from farmers using the app. Part of the Small AI for Development Hackathon, agriculture track.</p>
+    <a href="app.html" class="cta">Try the diagnosis tool</a>
 
     <div id="stats" class="stat-row"></div>
 
@@ -132,8 +152,8 @@
     <div id="registryContainer"><div class="loading">Loading…</div></div>
 
     <footer>
-      LeafScout — on-device MobileNetV3 + per-crop SVM, offline-first, synced opportunistically.
-      Data from the live Supabase project. Source: <a href="https://github.com/lucassgonz/LeafScout" target="_blank" rel="noopener">github.com/lucassgonz/LeafScout</a>
+      LeafScout runs an on-device MobileNetV3 model with a separate SVM head for each crop. It works offline and syncs when a connection is available.
+      This data comes from the live Supabase project. Source code: <a href="https://github.com/lucassgonz/LeafScout" target="_blank" rel="noopener">github.com/lucassgonz/LeafScout</a>
     </footer>
   </div>
 
