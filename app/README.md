@@ -3,9 +3,10 @@
 React Native app implementing ARCHITECTURE.md's on-device pipeline: pick a
 leaf photo → Skia decode/resize → shared MobileNetV3-Small TFLite backbone →
 crop-specific linear SVM head (JS port, `src/ml/svmHead.ts`) → confidence-
-gated result → saved to local SQLite (offline-first, sync-ready schema).
+gated result → saved to local SQLite, then opportunistically pushed to
+Supabase (`src/sync/syncObservations.ts`) whenever there's a connection.
 
-## Status as of 2026-10-04
+## Status as of 2026-10-04 (updated same day: sync is now real)
 
 **Verified working end-to-end on iOS Simulator (iPhone 17 Pro, iOS 26.5)** —
 all three crops (coffee/cassava/bean) correctly load their model head and
@@ -28,6 +29,23 @@ should work on a real device or via the Simulator's seeded Photos library,
 but I haven't exercised that path). Try "Pick a leaf photo" on your end
 before recording — if anything's off, it's most likely a Photos-library
 permission prompt needing a tap.
+
+**Supabase sync is wired and verified against the real project** (`hacknation`,
+chbhhzypwvkqmojvtcmx) — every saved observation is pushed via
+`syncPendingObservations()` (on save, and opportunistically on app launch),
+confirmed by directly querying the live `observations` table after a
+device-side classification. See `src/sync/` and `../supabase/schema.sql`.
+One non-obvious bug worth knowing if you touch this: Postgres requires a
+SELECT RLS policy to use *any* `ON CONFLICT` clause (even `DO NOTHING`),
+because the conflict check itself needs to see the existing row — an
+insert-only + update-only policy pair looks sufficient but isn't; the error
+("new row violates row-level security policy") reads like an insert/update
+problem and sent me down the wrong path for a bit. Full story in
+`schema.sql`'s comments next to `"public read: observations"`.
+
+Photo files are **not** uploaded (only diagnosis metadata) — this was a
+deliberate scope cut, not an oversight; see ARCHITECTURE.md §7.2 on consent
++ connection gating for actual photo upload.
 
 ## Running it
 
@@ -52,8 +70,10 @@ no iOS-only dependencies I'm aware of, but it's untested there.
   RGB, no manual normalization — the TFLite model has Keras's own
   preprocessing layer baked in, see `model/leafscout_ml/embeddings.py`)
 - `src/db/db.ts` — SQLite `observations` table, offline-first (every save
-  works with zero connectivity; `sync_status` column is there for a future
-  Supabase sync job, not wired up yet — see root ARCHITECTURE.md §7.2)
+  works with zero connectivity; `sync_status` tracks what's been pushed)
+- `src/sync/supabaseClient.ts`, `src/sync/syncObservations.ts` — the actual
+  sync job: reads locally-pending rows, upserts to Supabase, marks synced on
+  success, never throws (offline is the expected common case)
 - `src/data/diseaseClasses.ts` — per-crop, per-class display copy (English)
   and the `CONFIDENCE_THRESHOLD` guardrail constant
 - `src/data/samplePhotos.ts` — bundled demo photos (see Status above)
@@ -63,7 +83,7 @@ no iOS-only dependencies I'm aware of, but it's untested there.
 ## Tests
 
 ```bash
-npx jest        # 9 tests: svmHead JS<->Python parity + an App smoke test
+npx jest        # 13 tests: svmHead JS<->Python parity, sync logic, App smoke test
 npx tsc --noEmit
 ```
 
@@ -72,6 +92,10 @@ Native modules (`react-native-fast-tflite`, `react-native-sqlite-storage`,
 plain Node, which has no native module registry, so these would otherwise
 fail to even import. The SQLite mock keeps a real in-memory array so
 insert/list/count logic is still meaningfully exercised, not just stubbed.
+`src/sync/__tests__/syncObservations.test.ts` mocks `db.ts` and the Supabase
+client directly (jest.mock) to exercise the sync logic's branches (nothing
+pending, success, upsert failure, local-read failure) without touching the
+network.
 
 ## Known rough edges
 

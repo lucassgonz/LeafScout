@@ -14,6 +14,8 @@ import { CONFIDENCE_THRESHOLD, CROPS, diseaseInfo, type CropId } from '../data/d
 import { sampleLeafPhotoUri } from '../data/samplePhotos';
 import { pendingSyncCount, saveObservation } from '../db/db';
 import { AVAILABLE_CROPS, classifyLeafPhoto, preloadModel, type ClassifyResult } from '../ml/model';
+import { syncPendingObservations } from '../sync/syncObservations';
+import { uuidv4 } from '../util/uuid';
 
 export default function HomeScreen(): React.JSX.Element {
   const [modelReady, setModelReady] = useState(false);
@@ -22,16 +24,35 @@ export default function HomeScreen(): React.JSX.Element {
   const [classifying, setClassifying] = useState(false);
   const [result, setResult] = useState<ClassifyResult | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
+  const [syncing, setSyncing] = useState(false);
+  const [lastSyncNote, setLastSyncNote] = useState<string | null>(null);
 
   useEffect(() => {
     preloadModel()
       .then(() => setModelReady(true))
       .catch((err) => Alert.alert('Model failed to load', String(err)));
     refreshPendingCount();
+    attemptSync(); // opportunistic: flush anything left over from a prior offline session
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only by design
   }, []);
 
   function refreshPendingCount() {
     pendingSyncCount().then(setPendingCount).catch(() => {});
+  }
+
+  async function attemptSync() {
+    setSyncing(true);
+    try {
+      const syncResult = await syncPendingObservations();
+      if (syncResult.synced > 0) {
+        setLastSyncNote(`Synced ${syncResult.synced} observation${syncResult.synced === 1 ? '' : 's'} to the cooperative server.`);
+      } else if (syncResult.error) {
+        setLastSyncNote(null); // offline/unreachable — expected, stay quiet per ARCHITECTURE.md §3
+      }
+      refreshPendingCount();
+    } finally {
+      setSyncing(false);
+    }
   }
 
   async function pickAndClassify() {
@@ -54,7 +75,7 @@ export default function HomeScreen(): React.JSX.Element {
 
       const belowThreshold = prediction.confidence < CONFIDENCE_THRESHOLD;
       await saveObservation({
-        id: `${Date.now()}`,
+        id: uuidv4(),
         cropId,
         photoUri: uri,
         capturedAt: new Date().toISOString(),
@@ -62,9 +83,10 @@ export default function HomeScreen(): React.JSX.Element {
         confidence: prediction.confidence,
         topClasses: prediction.classProbabilities,
         belowThreshold,
-        syncStatus: 'pending', // no network dependency tonight — see ARCHITECTURE.md §3
+        syncStatus: 'pending', // saved locally first, always — sync is best-effort, see below
       });
       refreshPendingCount();
+      attemptSync(); // fire-and-forget: pushes this (and anything else pending) if online
     } catch (err) {
       Alert.alert('Classification failed', String(err));
     } finally {
@@ -146,7 +168,9 @@ export default function HomeScreen(): React.JSX.Element {
 
       <Text style={styles.syncNote}>
         {pendingCount} observation{pendingCount === 1 ? '' : 's'} saved offline, pending sync.
+        {syncing ? ' Syncing…' : ''}
       </Text>
+      {lastSyncNote && <Text style={styles.syncSuccessNote}>{lastSyncNote}</Text>}
     </ScrollView>
   );
 }
@@ -198,4 +222,5 @@ const styles = StyleSheet.create({
   actionBox: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#eef1ea' },
   actionLabel: { fontSize: 12, fontWeight: '700', color: '#2f6b3a', marginBottom: 4 },
   syncNote: { fontSize: 12, color: '#8a968b', textAlign: 'center', marginTop: 8 },
+  syncSuccessNote: { fontSize: 12, color: '#2f6b3a', textAlign: 'center', marginTop: 4, fontWeight: '600' },
 });

@@ -94,3 +94,36 @@ export async function pendingSyncCount(): Promise<number> {
   );
   return result.rows.item(0).n as number;
 }
+
+export async function listPendingObservations(): Promise<ObservationRecord[]> {
+  const db = await getDb();
+  const [result] = await db.executeSql(
+    `SELECT * FROM observations WHERE sync_status = 'pending' ORDER BY captured_at ASC`,
+  );
+  const rows: ObservationRecord[] = [];
+  for (let i = 0; i < result.rows.length; i++) {
+    const row = result.rows.item(i);
+    rows.push({
+      id: row.id,
+      cropId: row.crop_id,
+      photoUri: row.photo_uri,
+      capturedAt: row.captured_at,
+      predictedClass: row.predicted_class,
+      confidence: row.confidence,
+      topClasses: JSON.parse(row.top_classes_json),
+      belowThreshold: row.below_threshold === 1,
+      syncStatus: row.sync_status,
+    });
+  }
+  return rows;
+}
+
+export async function markObservationsSynced(ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const db = await getDb();
+  const placeholders = ids.map(() => '?').join(',');
+  await db.executeSql(
+    `UPDATE observations SET sync_status = 'synced' WHERE id IN (${placeholders})`,
+    ids,
+  );
+}

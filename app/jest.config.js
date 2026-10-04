@@ -5,6 +5,6 @@ module.exports = {
   // react-native itself, so without this the App smoke test fails to even
   // import HomeScreen with "Cannot use import statement outside a module".
   transformIgnorePatterns: [
-    'node_modules/(?!(react-native|@react-native|react-native-image-picker|react-native-sqlite-storage|@shopify/react-native-skia|react-native-fast-tflite|react-native-safe-area-context)/)',
+    'node_modules/(?!(react-native|@react-native|react-native-image-picker|react-native-sqlite-storage|@shopify/react-native-skia|react-native-fast-tflite|react-native-safe-area-context|react-native-url-polyfill)/)',
   ],
 };

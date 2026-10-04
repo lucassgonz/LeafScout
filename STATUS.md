@@ -1,6 +1,11 @@
-# Overnight status (2026-10-03 23:00 → 2026-10-04 00:1x)
+# Status (2026-10-03 23:00 → 2026-10-04, atualizado depois que você acordou)
 
-Bom dia. Resumo do que foi feito, o que falta, e exatamente o que preciso de você.
+Resumo do que foi feito, o que falta, e exatamente o que preciso de você.
+
+**Atualização do dia:** você pediu as "demais funcionalidades" e priorizou sync real
+com Supabase. Feito — não é mais schema parado, é sync de verdade rodando contra o
+projeto `hacknation` real, confirmado consultando a tabela direto. Detalhes na seção
+atualizada abaixo.
 
 ## O que está pronto e testado
 
@@ -25,7 +30,16 @@ Verificado com screenshots reais em `docs/screenshots/`:
 - Guardrail de confiança implementado (abaixo do limiar = "not sure, ask a person")
 - Persistência local em SQLite confirmada (contador de observações incrementou
   corretamente entre reinícios do app)
-- 9 testes JS passando (`cd app && npx jest`)
+- **Sync real com Supabase** — cada observação salva localmente é enviada pro projeto
+  `hacknation` (chbhhzypwvkqmojvtcmx) quando há conexão. Confirmado de verdade:
+  classifiquei uma foto no app e consultei a tabela `observations` no Supabase e a
+  linha estava lá. Schema aplicado com RLS habilitado e políticas corretas.
+  Achei e corrigi um bug sutil do Postgres no caminho: `ON CONFLICT` (usado no
+  upsert) exige política de SELECT, não só INSERT/UPDATE — sem isso toda tentativa
+  de sync falhava com um erro que parecia ser de permissão de escrita mas não era.
+  Documentado em `supabase/schema.sql`.
+- 13 testes JS passando (`cd app && npx jest`) — incluindo testes novos da lógica
+  de sync (sucesso, falha, offline, nada pendente)
 
 **Documentação**: `ARCHITECTURE.md` e `PITCH_SCRIPT.md` atualizados e batendo com o
 que foi de fato implementado (não é mais só plano, é o que existe).
@@ -42,14 +56,18 @@ que foi de fato implementado (não é mais só plano, é o que existe).
    Se não tiver uma folha à mão, o botão "Try a sample photo instead" já roda o
    pipeline real com uma foto de treino de verdade (não é mockado).
 
-2. **Supabase** — schema pronto em `supabase/schema.sql`, mas não apliquei porque
-   você só me passou a URL + chave pública (sem senha do banco). Não bloqueia o
-   vídeo (o app funciona 100% offline). Se quiser aplicar: Supabase Studio →
-   SQL Editor → cole o conteúdo do arquivo → Run. 1 minuto.
+2. ~~Supabase~~ — **feito**. Aplicado de verdade no projeto real via MCP, sync
+   funcionando ponta a ponta. Fotos em si NÃO são enviadas (só os dados da
+   observação) — decisão deliberada de escopo, não esquecimento.
 
 3. **Android** — não configurei (sem Android Studio instalado). Só validei iOS.
 
-4. **BRACOL (café) teve um problema real**: o zip da Mendeley está corrompido
+4. **Ainda faltam** (perguntei a você hoje, você priorizou sync primeiro):
+   - Áudio em idioma local (hoje só tem texto em inglês)
+   - Captura de GPS na observação (campo já existe no schema, não é preenchido)
+   - Dashboard do extensionista/cooperativa (não existe nem protótipo)
+
+5. **BRACOL (café) teve um problema real**: o zip da Mendeley está corrompido
    (sem diretório central válido — não é erro meu, é o arquivo deles mesmo).
    Escrevi um script de recuperação manual (`model/scripts/recover_bracol_zip.py`)
    que recuperou 1402 das 1747 imagens (80%). Documentado em `model/README.md`.
@@ -71,7 +89,7 @@ small-ai-bean-hackathon/
 │   ├── README.md
 │   ├── src/
 │   └── __mocks__/                     (mocks dos módulos nativos p/ os testes Jest)
-└── supabase/schema.sql                (pronto, não aplicado)
+└── supabase/schema.sql                (aplicado de verdade no projeto real)
 ```
 
 Pode gravar o vídeo com o que está aí. Qualquer coisa, só rodar `npx react-native

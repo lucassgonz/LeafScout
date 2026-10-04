@@ -17,9 +17,15 @@ plan, both swappable later without a redesign: (1) `react-native-image-picker` i
 a live `react-native-vision-camera` frame processor — the Simulator has no camera at all,
 and a static-photo flow is more reliable to ship in one weekend; (2) `@shopify/react-native-skia`
 for on-device image decode/resize/pixel-read, feeding the same shared TFLite backbone +
-per-crop SVM head described in §4. The Supabase sync layer (§7.2) is schema-ready
-(`sync_status` column) but not yet wired up — every other part of the "offline core loop"
-claim is real and tested, not aspirational.
+per-crop SVM head described in §4. **Update, same day:** the Supabase sync layer (§7.2)
+is now real too — schema applied to the live project, RLS enabled with real policies (see
+`supabase/schema.sql`'s notes on an easy-to-miss Postgres gotcha: `ON CONFLICT` upserts
+need a SELECT policy, not just INSERT/UPDATE, since the conflict check itself needs to see
+the existing row), and the app actually pushes each observation after saving it locally,
+confirmed end-to-end by querying the real table. Every part of the "offline core loop
+with best-effort sync" claim is real and tested, not aspirational. Still not built: a
+local-language audio layer, GPS capture, and the extension-officer dashboard — see
+`STATUS.md` for current priority.
 
 **Change from the previous draft:** we now build strictly on the datasets the concept
 note itself names in Annex B (§B.2) — **BRACOL** (coffee), **Cassava Leaf Disease**
@@ -259,9 +265,13 @@ CREATE TABLE advisory_log (
 );
 
 CREATE TABLE model_registry (
-  version                TEXT PRIMARY KEY,
-  backbone               TEXT NOT NULL,   -- 'mobilenet_v3_small' (shared across crops)
+  -- Composite PK, not just `version`: one shared backbone version has one
+  -- row PER CROP (its own head) — a single-column PK on `version` silently
+  -- drops every row but the first on insert (caught live on 2026-10-04
+  -- applying this to Supabase; fixed here and there via a composite key).
+  version                TEXT NOT NULL,
   crop_id                TEXT NOT NULL REFERENCES crops(id),  -- which head this row describes
+  backbone               TEXT NOT NULL,   -- 'mobilenet_v3_small' (shared across crops)
   head_type               TEXT NOT NULL,  -- 'svm' | 'softmax'
   tflite_asset_hash       TEXT NOT NULL,  -- shared backbone file hash (same across crop rows)
   head_weights_asset_hash TEXT,           -- this crop's head file hash
@@ -269,7 +279,8 @@ CREATE TABLE model_registry (
   accuracy_5fold_mean      REAL,
   accuracy_5fold_by_source_json TEXT,     -- per-source breakdown, see §5 caveat
   plantdoc_spotcheck_accuracy REAL,       -- field-realism counterweight result, nullable
-  created_at               TEXT NOT NULL
+  created_at               TEXT NOT NULL,
+  PRIMARY KEY (version, crop_id)
 );
 
 CREATE TABLE sync_queue (
