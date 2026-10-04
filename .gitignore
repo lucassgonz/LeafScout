@@ -1,0 +1,29 @@
+## Python
+model/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+## Data (large, not committed — see model/README.md for how to regenerate)
+model/raw/*
+!model/raw/.gitkeep
+model/fused/*
+!model/fused/.gitkeep
+model/artifacts/*
+!model/artifacts/.gitkeep
+
+## Secrets
+.env
+supabase/.env
+**/kaggle.json
+
+## Node / React Native (app/ scaffold, added later)
+app/node_modules/
+app/ios/Pods/
+app/ios/build/
+app/android/build/
+app/android/app/build/
+app/.expo/
+
+## OS
+.DS_Store
