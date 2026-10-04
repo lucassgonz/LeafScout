@@ -70,6 +70,13 @@
   .listen-btn { background: none; border: none; color: var(--accent); font-weight: 700; font-size: 0.8rem; cursor: pointer; text-decoration: underline; }
   .gps-note { font-size: 0.75rem; color: var(--text-muted); margin-top: 10px; }
   .sync-note { text-align: center; font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; }
+  .price-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px; margin-bottom: 20px; }
+  .price-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px; }
+  .price-label { font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
+  .price-value { font-size: 1.6rem; font-weight: 700; }
+  .price-sub { font-size: 0.78rem; color: var(--text-muted); margin-bottom: 10px; }
+  .price-sparkline { width: 100%; height: 48px; display: block; }
+  .price-note { font-size: 0.72rem; color: var(--text-muted); margin-top: 8px; line-height: 1.4; }
   footer { margin-top: 36px; font-size: 0.75rem; color: var(--text-muted); text-align: center; }
   footer a { color: var(--accent); }
   input[type="file"] { display: none; }
@@ -88,6 +95,8 @@
 
   <div class="section-label">Crop</div>
   <div class="crop-row" id="cropRow"></div>
+
+  <div class="price-card" id="priceCard"></div>
 
   <div class="drop-zone" id="dropZone">
     <div id="dropZoneText">📷 Click to choose a leaf photo, or drag one here</div>
@@ -133,9 +142,11 @@ let cropId = 'coffee';
 let backbone = null;
 let heads = {};
 let diseaseById = {};
+let marketPrices = {};
 
 const el = {
   cropRow: document.getElementById('cropRow'),
+  priceCard: document.getElementById('priceCard'),
   dropZone: document.getElementById('dropZone'),
   dropZoneText: document.getElementById('dropZoneText'),
   fileInput: document.getElementById('fileInput'),
@@ -159,9 +170,57 @@ function renderCrops() {
       cropId = c.id;
       el.resultCard.style.display = 'none';
       renderCrops();
+      renderPriceCard();
     };
     el.cropRow.appendChild(btn);
   }
+}
+
+// Direct answer to the problem named in the hackathon's own scenario: Noor
+// sells "to whichever middleman drives up the valley, at whatever price he
+// names" because she has no independent reference. This is that reference —
+// built from real WFP food price data (via HDX), not a placeholder number.
+// See model/scripts/build_price_reference.py for how it's generated.
+function sparklinePath(trend, width, height) {
+  const values = trend.map((t) => t.avg_usd_per_kg);
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const step = width / (values.length - 1);
+  return values
+    .map((v, i) => {
+      const x = i * step;
+      const y = height - ((v - min) / range) * (height - 6) - 3;
+      return `${i === 0 ? 'M' : 'L'}${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(' ');
+}
+
+function renderPriceCard() {
+  const data = marketPrices[cropId];
+  if (!data) {
+    el.priceCard.innerHTML = '';
+    return;
+  }
+
+  const first = data.trend[0].avg_usd_per_kg;
+  const last = data.latest_avg_usd_per_kg;
+  const change = ((last - first) / first) * 100;
+  const changeLabel = change >= 0 ? `up ${change.toFixed(0)}%` : `down ${Math.abs(change).toFixed(0)}%`;
+  const path = sparklinePath(data.trend, 300, 48);
+
+  el.priceCard.innerHTML = `
+    <div class="price-head">
+      <span class="price-label">Market price reference</span>
+      <span class="price-label">${data.reference_country}</span>
+    </div>
+    <div class="price-value">$${last.toFixed(2)} <span style="font-size:0.9rem;font-weight:500;color:var(--text-muted);">/ kg</span></div>
+    <div class="price-sub">${data.commodity} retail price, ${data.latest_date}. ${changeLabel} over the last ${data.trend.length} months (${data.latest_n_markets} markets).</div>
+    <svg class="price-sparkline" viewBox="0 0 300 48" preserveAspectRatio="none">
+      <path d="${path}" fill="none" stroke="var(--accent)" stroke-width="2" />
+    </svg>
+    <div class="price-note">An independent price to check against before you sell. Source: ${data.source}. ${data.note}</div>
+  `;
 }
 
 function uuidv4() {
@@ -338,20 +397,23 @@ async function init() {
   }
   await tf.ready();
 
-  const [backboneModel, coffeeHead, cassavaHead, beanHead, diseaseRes] = await Promise.all([
+  const [backboneModel, coffeeHead, cassavaHead, beanHead, diseaseRes, prices] = await Promise.all([
     tf.loadGraphModel('assets/model/backbone/model.json'),
     fetch('assets/model/coffee_head.json').then((r) => r.json()),
     fetch('assets/model/cassava_head.json').then((r) => r.json()),
     fetch('assets/model/bean_head.json').then((r) => r.json()),
     supabase.from('disease_classes').select('*'),
+    fetch('assets/data/market_prices.json').then((r) => r.json()),
   ]);
 
   backbone = backboneModel;
   heads = { coffee: coffeeHead, cassava: cassavaHead, bean: beanHead };
   diseaseById = {};
   for (const d of diseaseRes.data || []) diseaseById[`${d.crop_id}:${d.id}`] = d;
+  marketPrices = prices;
 
   renderCrops();
+  renderPriceCard();
   el.status.textContent = 'Model loaded. Pick a crop and a leaf photo.';
 
   el.dropZone.onclick = () => el.fileInput.click();

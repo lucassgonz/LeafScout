@@ -12,6 +12,7 @@ import {
 import { launchImageLibrary } from 'react-native-image-picker';
 import { speakRecommendedAction, stopSpeaking } from '../audio/speak';
 import { CONFIDENCE_THRESHOLD, CROPS, diseaseInfo, type CropId } from '../data/diseaseClasses';
+import { marketPriceFor, priceChangePercent } from '../data/marketPrices';
 import { sampleLeafPhotoUri } from '../data/samplePhotos';
 import { pendingSyncCount, saveObservation } from '../db/db';
 import { getCurrentCoordinates } from '../location/getLocation';
@@ -108,6 +109,8 @@ export default function HomeScreen(): React.JSX.Element {
 
   const belowThreshold = result ? result.confidence < CONFIDENCE_THRESHOLD : false;
   const info = result ? diseaseInfo(cropId, result.predictedClass) : undefined;
+  const marketPrice = marketPriceFor(cropId);
+  const priceChange = marketPrice ? priceChangePercent(marketPrice) : 0;
 
   function listenToAction() {
     if (!info) return;
@@ -136,6 +139,26 @@ export default function HomeScreen(): React.JSX.Element {
           </TouchableOpacity>
         ))}
       </View>
+
+      {marketPrice && (
+        <View style={styles.priceCard}>
+          <View style={styles.priceHeadRow}>
+            <Text style={styles.priceLabel}>Market price reference</Text>
+            <Text style={styles.priceLabel}>{marketPrice.reference_country}</Text>
+          </View>
+          <Text style={styles.priceValue}>
+            ${marketPrice.latest_avg_usd_per_kg.toFixed(2)} <Text style={styles.priceUnit}>/ kg</Text>
+          </Text>
+          <Text style={styles.priceSub}>
+            {marketPrice.commodity} retail price, {marketPrice.latest_date}.{' '}
+            {priceChange >= 0 ? 'Up' : 'Down'} {Math.abs(priceChange).toFixed(0)}% over the last{' '}
+            {marketPrice.trend.length} months ({marketPrice.latest_n_markets} markets).
+          </Text>
+          <Text style={styles.priceNote}>
+            An independent price to check against before you sell. Source: {marketPrice.source}.
+          </Text>
+        </View>
+      )}
 
       <TouchableOpacity
         style={[styles.captureButton, !modelReady && styles.disabledButton]}
@@ -229,6 +252,20 @@ const styles = StyleSheet.create({
   },
   disabledButton: { opacity: 0.5 },
   captureButtonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  priceCard: {
+    backgroundColor: '#fff',
+    borderRadius: 14,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#d9e3da',
+    marginBottom: 20,
+  },
+  priceHeadRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 },
+  priceLabel: { fontSize: 11, fontWeight: '700', color: '#55685c', textTransform: 'uppercase' },
+  priceValue: { fontSize: 24, fontWeight: '700', color: '#1f3d2b' },
+  priceUnit: { fontSize: 14, fontWeight: '500', color: '#55685c' },
+  priceSub: { fontSize: 12, color: '#55685c', marginTop: 4, lineHeight: 17 },
+  priceNote: { fontSize: 11, color: '#8a968b', marginTop: 6, lineHeight: 15 },
   sampleButton: { alignItems: 'center', paddingVertical: 10, marginBottom: 20 },
   sampleButtonText: { color: '#2f6b3a', fontSize: 14, fontWeight: '600', textDecorationLine: 'underline' },
   preview: { width: '100%', height: 240, borderRadius: 14, marginBottom: 20, backgroundColor: '#ddd' },

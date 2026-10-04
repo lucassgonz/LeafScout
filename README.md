@@ -1,23 +1,27 @@
 # 🌿 LeafScout
 
-**Offline-first crop disease diagnosis for coffee, cassava, and bean** — built for the
+**Offline-first crop disease diagnosis for coffee, cassava, and bean.** Built for the
 World Bank × Hack-Nation **Small AI for Development Hackathon** (Agriculture track,
 Annex B).
 
 > Because of LeafScout, a smallholder farmer will know in under a second, right in her
-> field, whether her crop has a disease — something she'd otherwise only find out when
-> the extension officer visits, which happens at most twice a year.
+> field, whether her crop has a disease. Today she only finds out when the extension
+> officer visits, which happens at most twice a year. And when she sells her harvest, she
+> finally has an independent price to check it against, instead of taking whatever the
+> middleman offers.
 
-A photo of a leaf goes in; a MobileNetV3-Small backbone shared across all three crops,
-with a linear SVM head trained per crop, runs **entirely on-device** (no server call, no
-data plan needed) and comes back with a diagnosis, a confidence score, and a
-locally-saved record — synced to a cooperative dashboard whenever a connection shows up.
+A photo of a leaf goes in. A MobileNetV3-Small backbone shared across all three crops,
+with a linear SVM head trained for each one, runs **entirely on-device** (no server call,
+no data plan needed) and returns a diagnosis, a confidence score, and a current market
+price for that crop. The observation is saved locally and synced to a cooperative
+dashboard whenever a connection shows up.
 
 | | |
 |---|---|
-| 📱 **Mobile app** | React Native, on-device TFLite inference (iOS verified; Android APK buildable) — [`app/`](app/) |
-| 🧠 **ML pipeline** | Dataset fusion → training → 5-fold CV, fully tested — [`model/`](model/) |
-| 🌐 **Web app (same AI, in-browser)** | [`web/app.html`](web/app.html) — pick a crop, diagnose a leaf, entirely client-side via TensorFlow.js |
+| 📱 **Mobile app** | React Native, on-device TFLite inference (iOS verified, Android APK buildable) — [`app/`](app/) |
+| 🧠 **ML pipeline** | Dataset fusion, training, 5-fold cross validation, fully tested — [`model/`](model/) |
+| 🌐 **Web app (same AI, in-browser)** | [`web/app.html`](web/app.html): pick a crop, diagnose a leaf, entirely client-side via TensorFlow.js |
+| 💰 **Market price reference** | Real WFP price data per crop, so a diagnosis isn't the only thing a farmer walks away with |
 | 📊 **Cooperative dashboard** | [`web/index.html`](web/index.html) — extension-officer view, deployable to Vercel |
 | 🗄️ **Backend** | Supabase (Postgres + RLS), schema in [`supabase/schema.sql`](supabase/schema.sql) |
 | 📐 **Full design doc** | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
@@ -92,7 +96,16 @@ round-tripped through the live Supabase project, 60+ automated tests:
 - **Android debug APK**: builds successfully (`cd app/android && ./gradlew assembleDebug`)
   after patching two legacy dependencies off the long-dead `jcenter()` repository (patches
   in `app/patches/`, applied automatically via `postinstall`). Not yet installed/run on a
-  device or emulator — only the iOS build has been interactively verified end-to-end.
+  device or emulator, only the iOS build has been interactively verified end to end.
+- **Market price reference**: the direct answer to the problem the concept note names for
+  Noor ("she sells her parchment to whichever middleman drives up the valley, at whatever
+  price he names"). Shows the latest retail price and a six month trend for the farmer's
+  crop, built from real WFP food price data pulled from HDX, not placeholder numbers.
+  Coffee is referenced from Ethiopia (WFP does not track it as a food-security commodity
+  in most countries, so Ethiopia, a major producer where it is tracked, is used); bean and
+  cassava from Uganda, matching this project's training data. It is a monthly snapshot,
+  not a live feed, regenerated with `model/scripts/build_price_reference.py`. Present on
+  both the mobile app and the web app.
 
 See [`STATUS.md`](STATUS.md) for the full build log, including real bugs found and fixed
 along the way (a corrupt upstream Mendeley archive, recovered with a custom parser; a
@@ -108,10 +121,9 @@ shut down).
 - Photo files are not uploaded to Supabase Storage (only diagnosis metadata, from both the
   mobile app and the web app) — a deliberate scope cut pending the consent +
   connection-gating described in `ARCHITECTURE.md` §7.2.
-- The Android APK hasn't been run interactively (no device/emulator in this environment) —
-  it builds and packages correctly, but that's a weaker claim than "verified working."
-- Regional price comparison (WFP food price data, named as a supporting dataset in the
-  concept note) is scoped but not yet built.
+- The Android APK hasn't been run interactively (no device or emulator in this
+  environment). It builds and packages correctly, but that is a weaker claim than
+  "verified working."
 
 ---
 

@@ -1,0 +1,128 @@
+{
+  "coffee": {
+    "commodity": "Coffee",
+    "reference_country": "Ethiopia",
+    "unit": "kg",
+    "latest_date": "2026-07-15",
+    "latest_avg_usd_per_kg": 7.357,
+    "latest_n_markets": 18,
+    "trend": [
+      {
+        "date": "2026-02-15",
+        "avg_usd_per_kg": 6.829,
+        "n_markets": 16
+      },
+      {
+        "date": "2026-03-15",
+        "avg_usd_per_kg": 6.969,
+        "n_markets": 16
+      },
+      {
+        "date": "2026-04-15",
+        "avg_usd_per_kg": 6.904,
+        "n_markets": 18
+      },
+      {
+        "date": "2026-05-15",
+        "avg_usd_per_kg": 6.864,
+        "n_markets": 15
+      },
+      {
+        "date": "2026-06-15",
+        "avg_usd_per_kg": 6.961,
+        "n_markets": 19
+      },
+      {
+        "date": "2026-07-15",
+        "avg_usd_per_kg": 7.357,
+        "n_markets": 18
+      }
+    ],
+    "source": "WFP Food Prices via HDX (data.humdata.org)",
+    "note": "Monthly snapshot, not a live feed. Coffee is tracked via Ethiopia (not usually in WFP's food-security basket elsewhere); bean and cassava via Uganda, matching this project's training data origin."
+  },
+  "bean": {
+    "commodity": "Beans",
+    "reference_country": "Uganda",
+    "unit": "kg",
+    "latest_date": "2026-08-15",
+    "latest_avg_usd_per_kg": 0.971,
+    "latest_n_markets": 13,
+    "trend": [
+      {
+        "date": "2026-03-15",
+        "avg_usd_per_kg": 0.892,
+        "n_markets": 21
+      },
+      {
+        "date": "2026-04-15",
+        "avg_usd_per_kg": 0.986,
+        "n_markets": 21
+      },
+      {
+        "date": "2026-05-15",
+        "avg_usd_per_kg": 0.846,
+        "n_markets": 13
+      },
+      {
+        "date": "2026-06-15",
+        "avg_usd_per_kg": 0.842,
+        "n_markets": 13
+      },
+      {
+        "date": "2026-07-15",
+        "avg_usd_per_kg": 0.868,
+        "n_markets": 13
+      },
+      {
+        "date": "2026-08-15",
+        "avg_usd_per_kg": 0.971,
+        "n_markets": 13
+      }
+    ],
+    "source": "WFP Food Prices via HDX (data.humdata.org)",
+    "note": "Monthly snapshot, not a live feed. Coffee is tracked via Ethiopia (not usually in WFP's food-security basket elsewhere); bean and cassava via Uganda, matching this project's training data origin."
+  },
+  "cassava": {
+    "commodity": "Cassava (fresh)",
+    "reference_country": "Uganda",
+    "unit": "kg",
+    "latest_date": "2026-08-15",
+    "latest_avg_usd_per_kg": 0.175,
+    "latest_n_markets": 13,
+    "trend": [
+      {
+        "date": "2026-03-15",
+        "avg_usd_per_kg": 0.169,
+        "n_markets": 13
+      },
+      {
+        "date": "2026-04-15",
+        "avg_usd_per_kg": 0.154,
+        "n_markets": 13
+      },
+      {
+        "date": "2026-05-15",
+        "avg_usd_per_kg": 0.173,
+        "n_markets": 13
+      },
+      {
+        "date": "2026-06-15",
+        "avg_usd_per_kg": 0.177,
+        "n_markets": 13
+      },
+      {
+        "date": "2026-07-15",
+        "avg_usd_per_kg": 0.245,
+        "n_markets": 13
+      },
+      {
+        "date": "2026-08-15",
+        "avg_usd_per_kg": 0.175,
+        "n_markets": 13
+      }
+    ],
+    "source": "WFP Food Prices via HDX (data.humdata.org)",
+    "note": "Monthly snapshot, not a live feed. Coffee is tracked via Ethiopia (not usually in WFP's food-security basket elsewhere); bean and cassava via Uganda, matching this project's training data origin."
+  }
+}
