@@ -25,9 +25,6 @@ dashboard whenever a connection shows up.
 | 📊 **Cooperative dashboard** | [`web/index.html`](web/index.html) — extension-officer view, deployable to Vercel |
 | 🗄️ **Backend** | Supabase (Postgres + RLS), schema in [`supabase/schema.sql`](supabase/schema.sql) |
 | 📐 **Full design doc** | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
-| 🎤 **Video pitch script** | [`PITCH_SCRIPT.md`](PITCH_SCRIPT.md) |
-| 🗣️ **Technical walkthrough script** | [`TECHNICAL_WALKTHROUGH.md`](TECHNICAL_WALKTHROUGH.md) |
-| 📝 **Build log** | [`STATUS.md`](STATUS.md) |
 
 **If you're judging this from the web** (`web/` deployed to Vercel): `app.html` is not a
 simplified demo — it loads the same MobileNetV3 backbone (converted to TensorFlow.js) and
@@ -113,18 +110,6 @@ non-obvious Postgres RLS behavior where `ON CONFLICT` upserts silently require a
 policy; and two Android libraries whose Gradle config hadn't been touched since `jcenter()`
 shut down).
 
-## Not yet built
-
-- Real camera capture is wired (`react-native-image-picker`, mobile) but untested on a
-  physical device — the Simulator has no camera; the web app's file picker/drag-drop is
-  tested.
-- Photo files are not uploaded to Supabase Storage (only diagnosis metadata, from both the
-  mobile app and the web app) — a deliberate scope cut pending the consent +
-  connection-gating described in `ARCHITECTURE.md` §7.2.
-- The Android APK hasn't been run interactively (no device or emulator in this
-  environment). It builds and packages correctly, but that is a weaker claim than
-  "verified working."
-
 ---
 
 ## Repository layout
@@ -137,9 +122,6 @@ LeafScout/
 ├── supabase/                 Database schema (applied to the live project)
 ├── docs/                     Screenshots and other supporting material
 ├── ARCHITECTURE.md           Full system design
-├── PITCH_SCRIPT.md           Timed video pitch script
-├── TECHNICAL_WALKTHROUGH.md  1-minute live-demo script, mapped to judging criteria
-└── STATUS.md                 Build log / what's done, what's left
 ```
 
 ## Running it
@@ -182,18 +164,6 @@ python3 -m http.server 8080   # or any static file server
 ```
 Regenerating `web/assets/model/backbone/` after retraining: `cd model && ./.venv/bin/python scripts/export_web_model.py`.
 
-### Deploying to Vercel
-
-1. Import this repository into Vercel.
-2. Set the project's **Root Directory** to `web`.
-3. **Framework Preset: "Other"** (plain static HTML/JS — no build command needed).
-4. Deploy. Both pages read Supabase directly client-side using the public
-   anon/publishable key (safe to expose — Row Level Security on the server is what
-   actually gates access; see `supabase/schema.sql`). `app.html` is the diagnosis tool;
-   `index.html` is the cooperative dashboard — link to whichever one you want as the
-   project's main page, or leave both (they cross-link each other).
-
----
 
 ## Tech stack
 
