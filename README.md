@@ -1,0 +1,160 @@
+# 🌿 LeafScout
+
+**Offline-first crop disease diagnosis for coffee, cassava, and bean** — built for the
+World Bank × Hack-Nation **Small AI for Development Hackathon** (Agriculture track,
+Annex B).
+
+> Because of LeafScout, a smallholder farmer will know in under a second, right in her
+> field, whether her crop has a disease — something she'd otherwise only find out when
+> the extension officer visits, which happens at most twice a year.
+
+A photo of a leaf goes in; a MobileNetV3-Small backbone shared across all three crops,
+with a linear SVM head trained per crop, runs **entirely on-device** (no server call, no
+data plan needed) and comes back with a diagnosis, a confidence score, and a
+locally-saved record — synced to a cooperative dashboard whenever a connection shows up.
+
+| | |
+|---|---|
+| 📱 **Mobile app** | React Native, on-device TFLite inference — [`app/`](app/) |
+| 🧠 **ML pipeline** | Dataset fusion → training → 5-fold CV, fully tested — [`model/`](model/) |
+| 🌐 **Web dashboard** | Cooperative/extension-officer view, deployable to Vercel — [`web/`](web/) |
+| 🗄️ **Backend** | Supabase (Postgres + RLS), schema in [`supabase/schema.sql`](supabase/schema.sql) |
+| 📐 **Full design doc** | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
+| 🎤 **Video pitch script** | [`PITCH_SCRIPT.md`](PITCH_SCRIPT.md) |
+| 📝 **Build log** | [`STATUS.md`](STATUS.md) |
+
+---
+
+## Results
+
+Trained on the exact datasets the hackathon's Annex B names for this sector — not a
+generic plant-disease dataset. One shared MobileNetV3-Small backbone (quantized,
+~1.1 MB), one linear SVM head per crop (tens of KB each), 5-fold cross-validated.
+
+| Crop | Dataset | Classes | Train images | 5-fold CV accuracy | Balanced accuracy | Held-out test |
+|---|---|---|---|---|---|---|
+| ☕ Coffee | [BRACOL](https://data.mendeley.com/datasets/yy2k5y8mxg/1) (Mendeley) | healthy, rust, leaf miner, phoma, cercospora | 940 | **81.7% ± 2.0%** | 76.8% | 79.9% |
+| 🌾 Cassava | Makerere/NaCRRI (Kaggle) | healthy, mosaic, brown streak, bacterial blight, green mottle | 14,977 | **72.0% ± 0.9%** | 56.8% | 72.4% |
+| 🫘 Bean | iBean, Makerere/NaCRRI (Kaggle) | healthy, rust, angular leaf spot | 693 | **91.3% ± 1.6%** | 91.3% | 91.2% |
+
+Full per-run detail (per-fold accuracy, per-source breakdown, artifact hashes) is in
+[`model/artifacts/model_registry.json`](model/artifacts/model_registry.json) and mirrored
+live in Supabase's `model_registry` table — the web dashboard reads it directly.
+
+**Cassava's lower, disclosed ceiling:** its raw data is ~12x class-imbalanced (mosaic
+disease dominates); `class_weight="balanced"` already mitigates it, and 72%/57% is the
+honest number that remains — in line with the published literature baseline for a
+lightweight on-device model on this dataset (65–71%, see
+[`ARCHITECTURE.md` §5](ARCHITECTURE.md#5-literature-review--model-selection-for-the-on-device-classifier)).
+We report it rather than hide it — "what the data does not cover" is a scored item in
+this challenge.
+
+---
+
+## What's actually built (not just planned)
+
+Verified end-to-end — screenshots in [`docs/screenshots/`](docs/screenshots/), real data
+round-tripped through the live Supabase project, 60+ automated tests:
+
+- **On-device inference**: photo → Skia decode/resize → shared TFLite backbone → crop's
+  SVM head (JS port, numerically tested against the Python training code) → confidence-
+  gated result. Verified on iOS Simulator for all three crops.
+- **Offline-first storage**: every observation saves locally (SQLite) with zero
+  connectivity, before anything else happens.
+- **Real Supabase sync**: schema applied to the live project, RLS enabled with real
+  policies, the app pushes each saved observation opportunistically. Confirmed by
+  classifying a photo on-device and querying the live table directly.
+- **GPS tagging**: best-effort location capture per observation (optional, never blocks
+  diagnosis) — `@react-native-community/geolocation`.
+- **Voice output**: on-device text-to-speech reads the recommended action aloud
+  (`react-native-tts`) — the "at least one interaction by voice" requirement, with every
+  native call defensively guarded (TTS routinely rejects for mundane reasons — missing
+  voice data, nothing currently speaking — and must never crash the app).
+- **Cooperative dashboard** (`web/index.html`): reads the same live Supabase tables —
+  recent observations, flagged low-confidence cases, per-crop filtering, and the model
+  registry table — zero build step, deployable to Vercel as-is.
+- **Guardrails**: below a confidence threshold, the app shows "not sure — ask a person"
+  instead of a diagnosis. A person always makes the final call; nothing is automated.
+
+See [`STATUS.md`](STATUS.md) for the full build log, including two real bugs found and
+fixed along the way (a corrupt upstream Mendeley archive, recovered with a custom parser;
+and a non-obvious Postgres RLS behavior where `ON CONFLICT` upserts silently require a
+SELECT policy).
+
+## Not yet built
+
+- Real camera capture is wired (`react-native-image-picker`) but untested on a physical
+  device — the Simulator has no camera.
+- Photo files are not uploaded to Supabase Storage (only diagnosis metadata) — a
+  deliberate scope cut pending the consent + connection-gating described in
+  `ARCHITECTURE.md` §7.2.
+- Android is untested (no Android Studio on the build machine).
+
+---
+
+## Repository layout
+
+```
+LeafScout/
+├── app/            React Native mobile app (iOS verified)
+├── model/          Python ML pipeline: dataset fusion, training, 34 tests
+├── web/            Static cooperative dashboard (deploy this folder to Vercel)
+├── supabase/       Database schema (applied to the live project)
+├── docs/           Screenshots and other supporting material
+├── ARCHITECTURE.md Full system design
+├── PITCH_SCRIPT.md Timed video pitch script
+└── STATUS.md       Build log / what's done, what's left
+```
+
+## Running it
+
+**Mobile app** (iOS, needs Xcode + CocoaPods):
+```bash
+cd app
+npm install
+cd ios && pod install && cd ..
+npx react-native start        # separate terminal
+npx react-native run-ios --simulator "iPhone 17 Pro"
+```
+Details, known build quirks, and test commands: [`app/README.md`](app/README.md).
+
+**ML pipeline** (Python 3.11, TensorFlow):
+```bash
+cd model
+python3.11 -m venv .venv
+./.venv/bin/pip install -r requirements.txt
+./.venv/bin/python -m pytest tests/ -v       # 34 tests, no dataset/network needed
+./.venv/bin/python scripts/run_pipeline.py all
+```
+Details: [`model/README.md`](model/README.md).
+
+**Web dashboard** — no build step, open directly or serve statically:
+```bash
+cd web
+python3 -m http.server 8080   # or any static file server
+```
+
+### Deploying the dashboard to Vercel
+
+1. Import this repository into Vercel.
+2. Set the project's **Root Directory** to `web`.
+3. Framework preset: **Other** (plain static HTML — no build command needed).
+4. Deploy. The page reads Supabase directly client-side using the public
+   anon/publishable key (safe to expose — Row Level Security on the server is what
+   actually gates access; see `supabase/schema.sql`).
+
+---
+
+## Tech stack
+
+React Native · TensorFlow / TensorFlow Lite · scikit-learn (linear SVM heads) ·
+`react-native-fast-tflite` · `@shopify/react-native-skia` ·
+`@react-native-community/geolocation` · `react-native-tts` · Supabase (Postgres + RLS) ·
+vanilla JS + `@supabase/supabase-js` for the dashboard · Python 3.11 + pytest + Jest for
+testing.
+
+## License
+
+Built for the Small AI for Development Hackathon (Oct 2026). Dataset licenses: BRACOL
+(CC BY 4.0), Makerere/NaCRRI cassava and iBean datasets (see their respective Kaggle
+listings).

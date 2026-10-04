@@ -16,8 +16,8 @@ function makeResult() {
 const mockDb = {
   executeSql: jest.fn(async (sql, params = []) => {
     if (sql.startsWith('INSERT')) {
-      const [id, crop_id, photo_uri, captured_at, predicted_class, confidence, top_classes_json, below_threshold, sync_status] = params;
-      rows.push({ id, crop_id, photo_uri, captured_at, predicted_class, confidence, top_classes_json, below_threshold, sync_status });
+      const [id, crop_id, photo_uri, captured_at, predicted_class, confidence, top_classes_json, below_threshold, sync_status, gps_lat, gps_lon] = params;
+      rows.push({ id, crop_id, photo_uri, captured_at, predicted_class, confidence, top_classes_json, below_threshold, sync_status, gps_lat, gps_lon });
       return [makeResult()];
     }
     if (sql.startsWith('SELECT COUNT')) {

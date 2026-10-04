@@ -10,6 +10,7 @@
     "test": "jest"
   },
   "dependencies": {
+    "@react-native-community/geolocation": "^3.4.0",
     "@react-native/new-app-screen": "0.87.1",
     "@shopify/react-native-skia": "^2.14.0",
     "@supabase/supabase-js": "^2.117.2",
@@ -20,6 +21,7 @@
     "react-native-nitro-modules": "^0.37.1",
     "react-native-safe-area-context": "^5.5.2",
     "react-native-sqlite-storage": "^6.0.1",
+    "react-native-tts": "^4.1.1",
     "react-native-url-polyfill": "^4.0.0"
   },
   "devDependencies": {

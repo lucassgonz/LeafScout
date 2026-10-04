@@ -15,9 +15,19 @@ const CREATE_OBSERVATIONS = `
     confidence REAL NOT NULL,
     top_classes_json TEXT NOT NULL,
     below_threshold INTEGER NOT NULL,
-    sync_status TEXT NOT NULL DEFAULT 'pending'
+    sync_status TEXT NOT NULL DEFAULT 'pending',
+    gps_lat REAL,
+    gps_lon REAL
   );
 `;
+
+// SQLite has no "ADD COLUMN IF NOT EXISTS" — for installs that created the
+// table before gps_lat/gps_lon existed, add them and swallow the
+// "duplicate column" error on every later launch.
+const MIGRATIONS = [
+  'ALTER TABLE observations ADD COLUMN gps_lat REAL',
+  'ALTER TABLE observations ADD COLUMN gps_lon REAL',
+];
 
 let dbPromise: Promise<SQLite.SQLiteDatabase> | null = null;
 
@@ -25,6 +35,13 @@ function getDb(): Promise<SQLite.SQLiteDatabase> {
   if (!dbPromise) {
     dbPromise = SQLite.openDatabase({ name: 'leafscout.db', location: 'default' }).then(async (db) => {
       await db.executeSql(CREATE_OBSERVATIONS);
+      for (const migration of MIGRATIONS) {
+        try {
+          await db.executeSql(migration);
+        } catch {
+          // column already exists — fine, this is just a new-column migration for older installs
+        }
+      }
       return db;
     });
   }
@@ -41,14 +58,32 @@ export interface ObservationRecord {
   topClasses: Record<string, number>;
   belowThreshold: boolean;
   syncStatus: 'pending' | 'synced' | 'failed';
+  gpsLat: number | null;
+  gpsLon: number | null;
+}
+
+function rowToRecord(row: any): ObservationRecord {
+  return {
+    id: row.id,
+    cropId: row.crop_id,
+    photoUri: row.photo_uri,
+    capturedAt: row.captured_at,
+    predictedClass: row.predicted_class,
+    confidence: row.confidence,
+    topClasses: JSON.parse(row.top_classes_json),
+    belowThreshold: row.below_threshold === 1,
+    syncStatus: row.sync_status,
+    gpsLat: row.gps_lat ?? null,
+    gpsLon: row.gps_lon ?? null,
+  };
 }
 
 export async function saveObservation(record: ObservationRecord): Promise<void> {
   const db = await getDb();
   await db.executeSql(
     `INSERT INTO observations
-      (id, crop_id, photo_uri, captured_at, predicted_class, confidence, top_classes_json, below_threshold, sync_status)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      (id, crop_id, photo_uri, captured_at, predicted_class, confidence, top_classes_json, below_threshold, sync_status, gps_lat, gps_lon)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       record.id,
       record.cropId,
@@ -59,6 +94,8 @@ export async function saveObservation(record: ObservationRecord): Promise<void> 
       JSON.stringify(record.topClasses),
       record.belowThreshold ? 1 : 0,
       record.syncStatus,
+      record.gpsLat,
+      record.gpsLon,
     ],
   );
 }
@@ -71,18 +108,7 @@ export async function listObservations(limit = 50): Promise<ObservationRecord[]>
   );
   const rows: ObservationRecord[] = [];
   for (let i = 0; i < result.rows.length; i++) {
-    const row = result.rows.item(i);
-    rows.push({
-      id: row.id,
-      cropId: row.crop_id,
-      photoUri: row.photo_uri,
-      capturedAt: row.captured_at,
-      predictedClass: row.predicted_class,
-      confidence: row.confidence,
-      topClasses: JSON.parse(row.top_classes_json),
-      belowThreshold: row.below_threshold === 1,
-      syncStatus: row.sync_status,
-    });
+    rows.push(rowToRecord(result.rows.item(i)));
   }
   return rows;
 }
@@ -102,18 +128,7 @@ export async function listPendingObservations(): Promise<ObservationRecord[]> {
   );
   const rows: ObservationRecord[] = [];
   for (let i = 0; i < result.rows.length; i++) {
-    const row = result.rows.item(i);
-    rows.push({
-      id: row.id,
-      cropId: row.crop_id,
-      photoUri: row.photo_uri,
-      capturedAt: row.captured_at,
-      predictedClass: row.predicted_class,
-      confidence: row.confidence,
-      topClasses: JSON.parse(row.top_classes_json),
-      belowThreshold: row.below_threshold === 1,
-      syncStatus: row.sync_status,
-    });
+    rows.push(rowToRecord(result.rows.item(i)));
   }
   return rows;
 }

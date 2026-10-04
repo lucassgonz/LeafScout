@@ -10,9 +10,11 @@ import {
   View,
 } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
+import { speakRecommendedAction, stopSpeaking } from '../audio/speak';
 import { CONFIDENCE_THRESHOLD, CROPS, diseaseInfo, type CropId } from '../data/diseaseClasses';
 import { sampleLeafPhotoUri } from '../data/samplePhotos';
 import { pendingSyncCount, saveObservation } from '../db/db';
+import { getCurrentCoordinates } from '../location/getLocation';
 import { AVAILABLE_CROPS, classifyLeafPhoto, preloadModel, type ClassifyResult } from '../ml/model';
 import { syncPendingObservations } from '../sync/syncObservations';
 import { uuidv4 } from '../util/uuid';
@@ -26,6 +28,7 @@ export default function HomeScreen(): React.JSX.Element {
   const [pendingCount, setPendingCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
   const [lastSyncNote, setLastSyncNote] = useState<string | null>(null);
+  const [lastCoords, setLastCoords] = useState<{ lat: number; lon: number } | null>(null);
 
   useEffect(() => {
     preloadModel()
@@ -66,12 +69,19 @@ export default function HomeScreen(): React.JSX.Element {
   }
 
   async function classify(uri: string) {
+    stopSpeaking();
     setPhotoUri(uri);
     setResult(null);
     setClassifying(true);
     try {
-      const prediction = await classifyLeafPhoto(uri, cropId);
+      // Run inference and the (best-effort, optional) GPS fix in parallel —
+      // a slow/denied location fix must never hold up the diagnosis itself.
+      const [prediction, coords] = await Promise.all([
+        classifyLeafPhoto(uri, cropId),
+        getCurrentCoordinates(),
+      ]);
       setResult(prediction);
+      setLastCoords(coords);
 
       const belowThreshold = prediction.confidence < CONFIDENCE_THRESHOLD;
       await saveObservation({
@@ -84,6 +94,8 @@ export default function HomeScreen(): React.JSX.Element {
         topClasses: prediction.classProbabilities,
         belowThreshold,
         syncStatus: 'pending', // saved locally first, always — sync is best-effort, see below
+        gpsLat: coords?.lat ?? null,
+        gpsLon: coords?.lon ?? null,
       });
       refreshPendingCount();
       attemptSync(); // fire-and-forget: pushes this (and anything else pending) if online
@@ -96,6 +108,11 @@ export default function HomeScreen(): React.JSX.Element {
 
   const belowThreshold = result ? result.confidence < CONFIDENCE_THRESHOLD : false;
   const info = result ? diseaseInfo(cropId, result.predictedClass) : undefined;
+
+  function listenToAction() {
+    if (!info) return;
+    speakRecommendedAction(info.recommendedAction, 'en');
+  }
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
@@ -157,11 +174,21 @@ export default function HomeScreen(): React.JSX.Element {
               {info && <Text style={styles.resultBody}>{info.descriptionEn}</Text>}
               {info && (
                 <View style={styles.actionBox}>
-                  <Text style={styles.actionLabel}>Recommended action</Text>
+                  <View style={styles.actionHeaderRow}>
+                    <Text style={styles.actionLabel}>Recommended action</Text>
+                    <TouchableOpacity onPress={listenToAction}>
+                      <Text style={styles.listenButtonText}>🔊 Listen</Text>
+                    </TouchableOpacity>
+                  </View>
                   <Text style={styles.resultBody}>{info.recommendedAction}</Text>
                 </View>
               )}
             </>
+          )}
+          {lastCoords && (
+            <Text style={styles.gpsNote}>
+              📍 {lastCoords.lat.toFixed(4)}, {lastCoords.lon.toFixed(4)}
+            </Text>
           )}
         </View>
       )}
@@ -220,7 +247,10 @@ const styles = StyleSheet.create({
   confidence: { fontSize: 14, color: '#55685c', marginTop: 2, marginBottom: 10 },
   resultBody: { fontSize: 14, color: '#33402f', lineHeight: 20 },
   actionBox: { marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#eef1ea' },
-  actionLabel: { fontSize: 12, fontWeight: '700', color: '#2f6b3a', marginBottom: 4 },
+  actionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
+  actionLabel: { fontSize: 12, fontWeight: '700', color: '#2f6b3a' },
+  listenButtonText: { fontSize: 12, fontWeight: '700', color: '#2f6b3a', textDecorationLine: 'underline' },
+  gpsNote: { fontSize: 11, color: '#8a968b', marginTop: 10 },
   syncNote: { fontSize: 12, color: '#8a968b', textAlign: 'center', marginTop: 8 },
   syncSuccessNote: { fontSize: 12, color: '#2f6b3a', textAlign: 'center', marginTop: 4, fontWeight: '600' },
 });

@@ -34,7 +34,7 @@
 		<true/>
 	</dict>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string></string>
+	<string>LeafScout tags each observation with your field's location so your cooperative can see where a disease is spreading. This is optional — diagnosis works without it.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>LeafScout uses the camera to photograph crop leaves for on-device disease diagnosis.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

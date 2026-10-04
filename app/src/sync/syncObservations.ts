@@ -46,6 +46,8 @@ export async function syncPendingObservations(): Promise<SyncResult> {
     confidence: obs.confidence,
     top3_json: obs.topClasses,
     below_threshold: obs.belowThreshold,
+    gps_lat: obs.gpsLat,
+    gps_lon: obs.gpsLon,
   }));
 
   const { error } = await supabase.from('observations').upsert(rows, { onConflict: 'id' });

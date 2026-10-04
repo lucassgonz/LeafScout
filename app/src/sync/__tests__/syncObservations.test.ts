@@ -21,6 +21,8 @@ function makeObservation(id: string): ObservationRecord {
     topClasses: { rust: 0.8, healthy: 0.2 },
     belowThreshold: false,
     syncStatus: 'pending',
+    gpsLat: null,
+    gpsLon: null,
   };
 }
 

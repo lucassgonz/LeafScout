@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LeafScout — Cooperative Dashboard</title>
+<meta name="description" content="Extension officer / cooperative view of LeafScout crop disease observations — Small AI for Development Hackathon, Agriculture track." />
+<style>
+  :root {
+    --bg: #f4f6f3;
+    --card: #ffffff;
+    --border: #d9e3da;
+    --text: #1f3d2b;
+    --text-muted: #55685c;
+    --accent: #2f6b3a;
+    --accent-dark: #1f3d2b;
+    --warn-bg: #fff6e8;
+    --warn-border: #f0cf8a;
+    --warn-text: #8a5a00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10160f;
+      --card: #171f16;
+      --border: #2a362a;
+      --text: #e8f0e6;
+      --text-muted: #9fb0a0;
+      --accent: #5fae70;
+      --accent-dark: #8fd09d;
+      --warn-bg: #2a2310;
+      --warn-border: #6b551f;
+      --warn-text: #e0b85a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: 24px 16px 64px;
+  }
+  .wrap { max-width: 980px; margin: 0 auto; }
+  h1 { font-size: 1.8rem; margin: 0 0 4px; }
+  .subtitle { color: var(--text-muted); margin: 0 0 28px; font-size: 0.95rem; }
+  .stat-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 12px;
+    margin-bottom: 28px;
+  }
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 16px;
+  }
+  .stat-card .n { font-size: 1.7rem; font-weight: 700; }
+  .stat-card .label { font-size: 0.8rem; color: var(--text-muted); margin-top: 2px; }
+  .section-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--text-muted);
+    margin: 28px 0 10px;
+  }
+  .filters { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .filter-btn {
+    border: 1px solid var(--border);
+    background: var(--card);
+    color: var(--text);
+    border-radius: 999px;
+    padding: 7px 14px;
+    font-size: 0.85rem;
+    cursor: pointer;
+  }
+  .filter-btn.active { background: var(--accent-dark); color: #fff; border-color: var(--accent-dark); }
+  table { width: 100%; border-collapse: collapse; background: var(--card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  thead th {
+    text-align: left;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  tbody td { padding: 10px 14px; border-bottom: 1px solid var(--border); font-size: 0.9rem; vertical-align: top; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr.flagged { background: var(--warn-bg); }
+  .pill {
+    display: inline-block;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 2px 9px;
+    border-radius: 999px;
+    background: var(--accent);
+    color: #fff;
+  }
+  .pill.warn { background: var(--warn-text); color: #fff; }
+  .muted { color: var(--text-muted); }
+  .empty, .loading, .error {
+    text-align: center;
+    padding: 40px 16px;
+    color: var(--text-muted);
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+  }
+  .error { color: #b4441c; }
+  footer { margin-top: 40px; font-size: 0.78rem; color: var(--text-muted); text-align: center; }
+  footer a { color: var(--accent); }
+  .table-scroll { overflow-x: auto; }
+  code { background: rgba(127,127,127,0.12); padding: 1px 5px; border-radius: 4px; font-size: 0.85em; }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>🌿 LeafScout</h1>
+    <p class="subtitle">Cooperative / extension officer view — live observations synced from the field app. Small AI for Development Hackathon, Agriculture track.</p>
+
+    <div id="stats" class="stat-row"></div>
+
+    <div class="section-title">Filter by crop</div>
+    <div id="cropFilters" class="filters"></div>
+
+    <div class="section-title">Recent observations</div>
+    <div id="observationsContainer"><div class="loading">Loading…</div></div>
+
+    <div class="section-title">Model versions in the field</div>
+    <div id="registryContainer"><div class="loading">Loading…</div></div>
+
+    <footer>
+      LeafScout — on-device MobileNetV3 + per-crop SVM, offline-first, synced opportunistically.
+      Data from the live Supabase project. Source: <a href="https://github.com/lucassgonz/LeafScout" target="_blank" rel="noopener">github.com/lucassgonz/LeafScout</a>
+    </footer>
+  </div>
+
+  <script type="module">
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+    const SUPABASE_URL = 'https://chbhhzypwvkqmojvtcmx.supabase.co';
+    const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_jIN1bAGM9fXpu6tyAkJBkQ_piWQaDS1';
+    const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+    let allObservations = [];
+    let diseaseById = {};
+    let cropFilter = 'all';
+
+    function fmtPct(x) {
+      return `${Math.round(x * 100)}%`;
+    }
+
+    function fmtDate(iso) {
+      try {
+        return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+      } catch {
+        return iso;
+      }
+    }
+
+    function renderStats(observations) {
+      const total = observations.length;
+      const flagged = observations.filter((o) => o.below_threshold).length;
+      const avgConfidence = total ? observations.reduce((s, o) => s + o.confidence, 0) / total : 0;
+      const byCrop = {};
+      for (const o of observations) byCrop[o.crop_id] = (byCrop[o.crop_id] || 0) + 1;
+      const topCrop = Object.entries(byCrop).sort((a, b) => b[1] - a[1])[0];
+
+      document.getElementById('stats').innerHTML = `
+        <div class="stat-card"><div class="n">${total}</div><div class="label">Total observations</div></div>
+        <div class="stat-card"><div class="n">${flagged}</div><div class="label">Flagged (low confidence)</div></div>
+        <div class="stat-card"><div class="n">${total ? fmtPct(avgConfidence) : '—'}</div><div class="label">Average confidence</div></div>
+        <div class="stat-card"><div class="n">${topCrop ? topCrop[0] : '—'}</div><div class="label">Most-reported crop</div></div>
+      `;
+    }
+
+    function renderCropFilters(observations) {
+      const crops = ['all', ...new Set(observations.map((o) => o.crop_id))];
+      const el = document.getElementById('cropFilters');
+      el.innerHTML = '';
+      for (const c of crops) {
+        const btn = document.createElement('button');
+        btn.className = 'filter-btn' + (c === cropFilter ? ' active' : '');
+        btn.textContent = c === 'all' ? 'All crops' : c.charAt(0).toUpperCase() + c.slice(1);
+        btn.onclick = () => {
+          cropFilter = c;
+          renderAll();
+        };
+        el.appendChild(btn);
+      }
+    }
+
+    function renderObservations(observations) {
+      const container = document.getElementById('observationsContainer');
+      const filtered = cropFilter === 'all' ? observations : observations.filter((o) => o.crop_id === cropFilter);
+
+      if (filtered.length === 0) {
+        container.innerHTML = '<div class="empty">No observations yet for this filter. Once the mobile app syncs a diagnosis, it shows up here.</div>';
+        return;
+      }
+
+      const rows = filtered
+        .slice(0, 100)
+        .map((o) => {
+          const disease = diseaseById[`${o.crop_id}:${o.predicted_class}`];
+          const name = disease ? disease.name_en : o.predicted_class;
+          const loc = o.gps_lat != null && o.gps_lon != null ? `${o.gps_lat.toFixed(3)}, ${o.gps_lon.toFixed(3)}` : '<span class="muted">—</span>';
+          return `
+            <tr class="${o.below_threshold ? 'flagged' : ''}">
+              <td>${fmtDate(o.captured_at)}</td>
+              <td>${o.crop_id}</td>
+              <td>${name}${o.below_threshold ? ' <span class="pill warn">needs review</span>' : ''}</td>
+              <td>${fmtPct(o.confidence)}</td>
+              <td>${loc}</td>
+            </tr>`;
+        })
+        .join('');
+
+      container.innerHTML = `
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>When</th><th>Crop</th><th>Diagnosis</th><th>Confidence</th><th>Location</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    }
+
+    async function renderRegistry() {
+      const container = document.getElementById('registryContainer');
+      const { data, error } = await supabase
+        .from('model_registry')
+        .select('*')
+        .order('crop_id');
+
+      if (error) {
+        container.innerHTML = `<div class="error">Could not load model registry: ${error.message}</div>`;
+        return;
+      }
+      if (!data || data.length === 0) {
+        container.innerHTML = '<div class="empty">No model versions registered yet.</div>';
+        return;
+      }
+
+      const rows = data
+        .map(
+          (m) => `
+            <tr>
+              <td>${m.crop_id}</td>
+              <td><code>${m.version}</code></td>
+              <td>${m.backbone} + ${m.head_type}</td>
+              <td>${m.accuracy_5fold_mean != null ? fmtPct(m.accuracy_5fold_mean) : '—'}</td>
+              <td>${m.trained_on_dataset}</td>
+            </tr>`,
+        )
+        .join('');
+
+      container.innerHTML = `
+        <div class="table-scroll">
+          <table>
+            <thead><tr><th>Crop</th><th>Version</th><th>Model</th><th>5-fold accuracy</th><th>Trained on</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    }
+
+    function renderAll() {
+      renderStats(allObservations);
+      renderCropFilters(allObservations);
+      renderObservations(allObservations);
+    }
+
+    async function init() {
+      const [obsRes, diseaseRes] = await Promise.all([
+        supabase.from('observations').select('*').order('captured_at', { ascending: false }).limit(500),
+        supabase.from('disease_classes').select('*'),
+      ]);
+
+      if (obsRes.error) {
+        document.getElementById('observationsContainer').innerHTML = `<div class="error">Could not load observations: ${obsRes.error.message}</div>`;
+        document.getElementById('stats').innerHTML = '';
+        return;
+      }
+
+      allObservations = obsRes.data || [];
+      diseaseById = {};
+      for (const d of diseaseRes.data || []) diseaseById[`${d.crop_id}:${d.id}`] = d;
+
+      renderAll();
+      renderRegistry();
+    }
+
+    init();
+  </script>
+</body>
+</html>
