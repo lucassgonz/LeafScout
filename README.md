@@ -15,13 +15,21 @@ locally-saved record — synced to a cooperative dashboard whenever a connection
 
 | | |
 |---|---|
-| 📱 **Mobile app** | React Native, on-device TFLite inference — [`app/`](app/) |
+| 📱 **Mobile app** | React Native, on-device TFLite inference (iOS verified; Android APK buildable) — [`app/`](app/) |
 | 🧠 **ML pipeline** | Dataset fusion → training → 5-fold CV, fully tested — [`model/`](model/) |
-| 🌐 **Web dashboard** | Cooperative/extension-officer view, deployable to Vercel — [`web/`](web/) |
+| 🌐 **Web app (same AI, in-browser)** | [`web/app.html`](web/app.html) — pick a crop, diagnose a leaf, entirely client-side via TensorFlow.js |
+| 📊 **Cooperative dashboard** | [`web/index.html`](web/index.html) — extension-officer view, deployable to Vercel |
 | 🗄️ **Backend** | Supabase (Postgres + RLS), schema in [`supabase/schema.sql`](supabase/schema.sql) |
 | 📐 **Full design doc** | [`ARCHITECTURE.md`](ARCHITECTURE.md) |
 | 🎤 **Video pitch script** | [`PITCH_SCRIPT.md`](PITCH_SCRIPT.md) |
+| 🗣️ **Technical walkthrough script** | [`TECHNICAL_WALKTHROUGH.md`](TECHNICAL_WALKTHROUGH.md) |
 | 📝 **Build log** | [`STATUS.md`](STATUS.md) |
+
+**If you're judging this from the web** (`web/` deployed to Vercel): `app.html` is not a
+simplified demo — it loads the same MobileNetV3 backbone (converted to TensorFlow.js) and
+the same per-crop SVM heads the mobile app ships, and runs the identical math client-side.
+The mobile app itself is a separate, fully-built React Native project — see
+"Mobile app" below for what's verified there and how to run it.
 
 ---
 
@@ -70,25 +78,40 @@ round-tripped through the live Supabase project, 60+ automated tests:
   (`react-native-tts`) — the "at least one interaction by voice" requirement, with every
   native call defensively guarded (TTS routinely rejects for mundane reasons — missing
   voice data, nothing currently speaking — and must never crash the app).
+- **Web app, same AI** (`web/app.html`): the shared MobileNetV3 backbone, converted to
+  TensorFlow.js (`model/scripts/export_web_model.py`), plus the same three SVM heads,
+  running entirely in-browser — WebGL-accelerated (~1.5s/photo), CPU fallback if WebGL
+  isn't available. Verified for all three crops; each diagnosis also syncs to the same
+  Supabase `observations` table the mobile app writes to. The photo never leaves the
+  browser.
 - **Cooperative dashboard** (`web/index.html`): reads the same live Supabase tables —
   recent observations, flagged low-confidence cases, per-crop filtering, and the model
   registry table — zero build step, deployable to Vercel as-is.
 - **Guardrails**: below a confidence threshold, the app shows "not sure — ask a person"
   instead of a diagnosis. A person always makes the final call; nothing is automated.
+- **Android debug APK**: builds successfully (`cd app/android && ./gradlew assembleDebug`)
+  after patching two legacy dependencies off the long-dead `jcenter()` repository (patches
+  in `app/patches/`, applied automatically via `postinstall`). Not yet installed/run on a
+  device or emulator — only the iOS build has been interactively verified end-to-end.
 
-See [`STATUS.md`](STATUS.md) for the full build log, including two real bugs found and
-fixed along the way (a corrupt upstream Mendeley archive, recovered with a custom parser;
-and a non-obvious Postgres RLS behavior where `ON CONFLICT` upserts silently require a
-SELECT policy).
+See [`STATUS.md`](STATUS.md) for the full build log, including real bugs found and fixed
+along the way (a corrupt upstream Mendeley archive, recovered with a custom parser; a
+non-obvious Postgres RLS behavior where `ON CONFLICT` upserts silently require a SELECT
+policy; and two Android libraries whose Gradle config hadn't been touched since `jcenter()`
+shut down).
 
 ## Not yet built
 
-- Real camera capture is wired (`react-native-image-picker`) but untested on a physical
-  device — the Simulator has no camera.
-- Photo files are not uploaded to Supabase Storage (only diagnosis metadata) — a
-  deliberate scope cut pending the consent + connection-gating described in
-  `ARCHITECTURE.md` §7.2.
-- Android is untested (no Android Studio on the build machine).
+- Real camera capture is wired (`react-native-image-picker`, mobile) but untested on a
+  physical device — the Simulator has no camera; the web app's file picker/drag-drop is
+  tested.
+- Photo files are not uploaded to Supabase Storage (only diagnosis metadata, from both the
+  mobile app and the web app) — a deliberate scope cut pending the consent +
+  connection-gating described in `ARCHITECTURE.md` §7.2.
+- The Android APK hasn't been run interactively (no device/emulator in this environment) —
+  it builds and packages correctly, but that's a weaker claim than "verified working."
+- Regional price comparison (WFP food price data, named as a supporting dataset in the
+  concept note) is scoped but not yet built.
 
 ---
 
@@ -96,14 +119,15 @@ SELECT policy).
 
 ```
 LeafScout/
-├── app/            React Native mobile app (iOS verified)
-├── model/          Python ML pipeline: dataset fusion, training, 34 tests
-├── web/            Static cooperative dashboard (deploy this folder to Vercel)
-├── supabase/       Database schema (applied to the live project)
-├── docs/           Screenshots and other supporting material
-├── ARCHITECTURE.md Full system design
-├── PITCH_SCRIPT.md Timed video pitch script
-└── STATUS.md       Build log / what's done, what's left
+├── app/                      React Native mobile app (iOS verified, Android APK builds)
+├── model/                    Python ML pipeline: dataset fusion, training, 34 tests
+├── web/                      app.html (diagnose) + index.html (dashboard) — deploy to Vercel
+├── supabase/                 Database schema (applied to the live project)
+├── docs/                     Screenshots and other supporting material
+├── ARCHITECTURE.md           Full system design
+├── PITCH_SCRIPT.md           Timed video pitch script
+├── TECHNICAL_WALKTHROUGH.md  1-minute live-demo script, mapped to judging criteria
+└── STATUS.md                 Build log / what's done, what's left
 ```
 
 ## Running it
@@ -118,6 +142,15 @@ npx react-native run-ios --simulator "iPhone 17 Pro"
 ```
 Details, known build quirks, and test commands: [`app/README.md`](app/README.md).
 
+**Android** (needs the Android SDK + NDK; no emulator/device testing done here, build
+only):
+```bash
+cd app/android
+echo "sdk.dir=$ANDROID_HOME" > local.properties   # point at your SDK install
+./gradlew assembleDebug
+# APK at app/android/app/build/outputs/apk/debug/app-debug.apk
+```
+
 **ML pipeline** (Python 3.11, TensorFlow):
 ```bash
 cd model
@@ -128,30 +161,35 @@ python3.11 -m venv .venv
 ```
 Details: [`model/README.md`](model/README.md).
 
-**Web dashboard** — no build step, open directly or serve statically:
+**Web** (diagnosis app + dashboard) — no build step, open directly or serve statically:
 ```bash
 cd web
 python3 -m http.server 8080   # or any static file server
+# http://localhost:8080/app.html   — diagnose a leaf
+# http://localhost:8080/index.html — cooperative dashboard
 ```
+Regenerating `web/assets/model/backbone/` after retraining: `cd model && ./.venv/bin/python scripts/export_web_model.py`.
 
-### Deploying the dashboard to Vercel
+### Deploying to Vercel
 
 1. Import this repository into Vercel.
 2. Set the project's **Root Directory** to `web`.
-3. Framework preset: **Other** (plain static HTML — no build command needed).
-4. Deploy. The page reads Supabase directly client-side using the public
+3. **Framework Preset: "Other"** (plain static HTML/JS — no build command needed).
+4. Deploy. Both pages read Supabase directly client-side using the public
    anon/publishable key (safe to expose — Row Level Security on the server is what
-   actually gates access; see `supabase/schema.sql`).
+   actually gates access; see `supabase/schema.sql`). `app.html` is the diagnosis tool;
+   `index.html` is the cooperative dashboard — link to whichever one you want as the
+   project's main page, or leave both (they cross-link each other).
 
 ---
 
 ## Tech stack
 
-React Native · TensorFlow / TensorFlow Lite · scikit-learn (linear SVM heads) ·
-`react-native-fast-tflite` · `@shopify/react-native-skia` ·
+React Native · TensorFlow / TensorFlow Lite / TensorFlow.js · scikit-learn (linear SVM
+heads) · `react-native-fast-tflite` · `@shopify/react-native-skia` ·
 `@react-native-community/geolocation` · `react-native-tts` · Supabase (Postgres + RLS) ·
-vanilla JS + `@supabase/supabase-js` for the dashboard · Python 3.11 + pytest + Jest for
-testing.
+vanilla JS + `@supabase/supabase-js` + `@tensorflow/tfjs` for the web app · Python 3.11 +
+pytest + Jest for testing.
 
 ## License
 

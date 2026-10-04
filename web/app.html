@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LeafScout — Diagnose</title>
+<meta name="description" content="LeafScout's on-device crop disease diagnosis, running in the browser via TensorFlow.js — the same MobileNetV3 backbone and per-crop SVM heads as the mobile app." />
+<style>
+  :root {
+    --bg: #f4f6f3; --card: #ffffff; --border: #d9e3da; --text: #1f3d2b;
+    --text-muted: #55685c; --accent: #2f6b3a; --accent-dark: #1f3d2b;
+    --warn-bg: #fff6e8; --warn-border: #f0cf8a; --warn-text: #8a5a00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10160f; --card: #171f16; --border: #2a362a; --text: #e8f0e6;
+      --text-muted: #9fb0a0; --accent: #5fae70; --accent-dark: #8fd09d;
+      --warn-bg: #2a2310; --warn-border: #6b551f; --warn-text: #e0b85a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: 24px 16px 64px;
+  }
+  .wrap { max-width: 560px; margin: 0 auto; }
+  nav { display: flex; gap: 16px; margin-bottom: 20px; font-size: 0.85rem; }
+  nav a { color: var(--text-muted); text-decoration: none; }
+  nav a.active { color: var(--accent); font-weight: 700; }
+  h1 { font-size: 1.9rem; margin: 0 0 4px; }
+  .subtitle { color: var(--text-muted); margin: 0 0 24px; font-size: 0.95rem; }
+  .badge {
+    display: inline-block; font-size: 0.72rem; font-weight: 700; color: var(--accent);
+    background: rgba(47,107,58,0.12); border-radius: 999px; padding: 3px 10px; margin-bottom: 20px;
+  }
+  .section-label { font-size: 0.8rem; font-weight: 700; color: var(--text-muted); margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.03em; }
+  .crop-row { display: flex; gap: 8px; margin-bottom: 20px; }
+  .crop-btn {
+    flex: 1; padding: 10px 6px; border-radius: 10px; border: 1px solid var(--border);
+    background: var(--card); color: var(--text); font-size: 0.85rem; font-weight: 600; cursor: pointer;
+  }
+  .crop-btn.active { background: var(--accent-dark); color: #fff; border-color: var(--accent-dark); }
+  .drop-zone {
+    border: 2px dashed var(--border); border-radius: 14px; padding: 28px 16px; text-align: center;
+    background: var(--card); cursor: pointer; margin-bottom: 14px;
+  }
+  .drop-zone.drag { border-color: var(--accent); background: var(--warn-bg); }
+  .btn-primary {
+    display: block; width: 100%; background: var(--accent); color: #fff; border: none;
+    padding: 15px; border-radius: 14px; font-size: 1rem; font-weight: 700; cursor: pointer; margin-bottom: 10px;
+  }
+  .btn-primary:disabled { opacity: 0.5; cursor: default; }
+  .btn-link {
+    display: block; width: 100%; text-align: center; background: none; border: none;
+    color: var(--accent); font-size: 0.9rem; font-weight: 600; text-decoration: underline;
+    cursor: pointer; padding: 8px; margin-bottom: 16px;
+  }
+  .preview { width: 100%; max-height: 280px; object-fit: cover; border-radius: 14px; margin-bottom: 16px; display: none; background: #ddd; }
+  .status { text-align: center; color: var(--text-muted); font-size: 0.9rem; margin: 16px 0; }
+  .result-card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 18px; margin-bottom: 16px; display: none; }
+  .result-card.warn { background: var(--warn-bg); border-color: var(--warn-border); }
+  .result-title { font-size: 1.3rem; font-weight: 700; margin: 0 0 2px; }
+  .result-title.warn { color: var(--warn-text); font-size: 1.1rem; }
+  .confidence { color: var(--text-muted); font-size: 0.9rem; margin-bottom: 10px; }
+  .result-body { font-size: 0.9rem; line-height: 1.5; }
+  .action-box { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
+  .action-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .action-label { font-size: 0.75rem; font-weight: 700; color: var(--accent); text-transform: uppercase; }
+  .listen-btn { background: none; border: none; color: var(--accent); font-weight: 700; font-size: 0.8rem; cursor: pointer; text-decoration: underline; }
+  .gps-note { font-size: 0.75rem; color: var(--text-muted); margin-top: 10px; }
+  .sync-note { text-align: center; font-size: 0.75rem; color: var(--text-muted); margin-top: 6px; }
+  footer { margin-top: 36px; font-size: 0.75rem; color: var(--text-muted); text-align: center; }
+  footer a { color: var(--accent); }
+  input[type="file"] { display: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <nav>
+    <a href="index.html">Cooperative dashboard</a>
+    <a href="app.html" class="active">Diagnose a leaf</a>
+  </nav>
+
+  <h1>🌿 LeafScout</h1>
+  <p class="subtitle">Offline-capable crop disease diagnosis — this page runs the exact same MobileNetV3 + SVM pipeline as the mobile app, in your browser via TensorFlow.js.</p>
+  <div class="badge">Web port of the mobile app's on-device AI — not a separate, simplified demo</div>
+
+  <div class="section-label">Crop</div>
+  <div class="crop-row" id="cropRow"></div>
+
+  <div class="drop-zone" id="dropZone">
+    <div id="dropZoneText">📷 Click to choose a leaf photo, or drag one here</div>
+    <input type="file" id="fileInput" accept="image/*" />
+  </div>
+  <button class="btn-link" id="sampleBtn" type="button">Try a sample photo instead</button>
+
+  <img class="preview" id="preview" alt="Selected leaf" />
+  <div class="status" id="status"></div>
+
+  <div class="result-card" id="resultCard">
+    <div id="resultInner"></div>
+  </div>
+
+  <div class="sync-note" id="syncNote"></div>
+
+  <footer>
+    Same backbone + SVM heads as the mobile app (see <code>model/README.md</code>). Diagnosis
+    runs entirely in your browser — the photo is never uploaded. Source:
+    <a href="https://github.com/lucassgonz/LeafScout" target="_blank" rel="noopener">github.com/lucassgonz/LeafScout</a>
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+<script type="module">
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+
+const SUPABASE_URL = 'https://chbhhzypwvkqmojvtcmx.supabase.co';
+const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_jIN1bAGM9fXpu6tyAkJBkQ_piWQaDS1';
+const supabase = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+
+const CONFIDENCE_THRESHOLD = 0.55;
+const MODEL_VERSION = 'v1-2026-10-04';
+const IMAGE_SIZE = 224;
+
+const CROPS = [
+  { id: 'coffee', label: 'Coffee (Arabica)' },
+  { id: 'cassava', label: 'Cassava' },
+  { id: 'bean', label: 'Common bean' },
+];
+
+let cropId = 'coffee';
+let backbone = null;
+let heads = {};
+let diseaseById = {};
+
+const el = {
+  cropRow: document.getElementById('cropRow'),
+  dropZone: document.getElementById('dropZone'),
+  dropZoneText: document.getElementById('dropZoneText'),
+  fileInput: document.getElementById('fileInput'),
+  sampleBtn: document.getElementById('sampleBtn'),
+  preview: document.getElementById('preview'),
+  status: document.getElementById('status'),
+  resultCard: document.getElementById('resultCard'),
+  resultInner: document.getElementById('resultInner'),
+  syncNote: document.getElementById('syncNote'),
+};
+
+function renderCrops() {
+  el.cropRow.innerHTML = '';
+  for (const c of CROPS) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'crop-btn' + (c.id === cropId ? ' active' : '');
+    btn.textContent = c.label;
+    btn.disabled = !heads[c.id];
+    btn.onclick = () => {
+      cropId = c.id;
+      el.resultCard.style.display = 'none';
+      renderCrops();
+    };
+    el.cropRow.appendChild(btn);
+  }
+}
+
+function uuidv4() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+// Same math as app/src/ml/svmHead.ts's predictWithWeights and
+// model/leafscout_ml/svm_head.py's predict_with_weights — must stay
+// numerically identical across all three.
+function predictWithWeights(embedding, weights) {
+  const { classes, coef, intercept } = weights;
+  const scores = classes.map((_, c) => {
+    let dot = 0;
+    const row = coef[c];
+    for (let i = 0; i < row.length; i++) dot += row[i] * embedding[i];
+    return dot + intercept[c];
+  });
+  const maxScore = Math.max(...scores);
+  const expScores = scores.map((s) => Math.exp(s - maxScore));
+  const sumExp = expScores.reduce((a, b) => a + b, 0);
+  const probs = expScores.map((e) => e / sumExp);
+  let bestIdx = 0;
+  for (let c = 1; c < scores.length; c++) if (scores[c] > scores[bestIdx]) bestIdx = c;
+  const classProbabilities = {};
+  classes.forEach((cls, i) => (classProbabilities[cls] = probs[i]));
+  return { predictedClass: classes[bestIdx], confidence: probs[bestIdx], classProbabilities };
+}
+
+// Resize/decode via canvas, raw 0-255 RGB (no normalization) — the model
+// was exported with Keras's include_preprocessing=True baked in, same
+// convention as model/leafscout_ml/embeddings.py and the mobile app.
+async function imageToTensor(imgEl) {
+  const canvas = document.createElement('canvas');
+  canvas.width = IMAGE_SIZE;
+  canvas.height = IMAGE_SIZE;
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(imgEl, 0, 0, IMAGE_SIZE, IMAGE_SIZE);
+  const { data } = ctx.getImageData(0, 0, IMAGE_SIZE, IMAGE_SIZE); // RGBA
+
+  const rgb = new Float32Array(IMAGE_SIZE * IMAGE_SIZE * 3);
+  let o = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    rgb[o++] = data[i];
+    rgb[o++] = data[i + 1];
+    rgb[o++] = data[i + 2];
+  }
+  return tf.tensor4d(rgb, [1, IMAGE_SIZE, IMAGE_SIZE, 3]);
+}
+
+async function loadImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+async function getCoordinates() {
+  if (!navigator.geolocation) return null;
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ lat: pos.coords.latitude, lon: pos.coords.longitude }),
+      () => resolve(null),
+      { timeout: 6000, maximumAge: 60000 },
+    );
+  });
+}
+
+function diseaseInfo(crop, classId) {
+  return diseaseById[`${crop}:${classId}`];
+}
+
+async function classify(img) {
+  el.preview.src = img.src;
+  el.preview.style.display = 'block';
+  el.resultCard.style.display = 'none';
+  el.status.textContent = 'Running on-device inference…';
+
+  const t0 = performance.now();
+  const input = await imageToTensor(img);
+  const embeddingTensor = backbone.execute(input);
+  const embedding = await embeddingTensor.data();
+  input.dispose();
+  embeddingTensor.dispose();
+
+  const prediction = predictWithWeights(embedding, heads[cropId]);
+  const ms = Math.round(performance.now() - t0);
+  el.status.textContent = `Done in ${ms} ms (on-device, in your browser).`;
+
+  const belowThreshold = prediction.confidence < CONFIDENCE_THRESHOLD;
+  const info = diseaseInfo(cropId, prediction.predictedClass);
+  const coords = await getCoordinates();
+
+  renderResult(prediction, belowThreshold, info, coords);
+  await saveAndSync(prediction, belowThreshold, coords);
+}
+
+function renderResult(prediction, belowThreshold, info, coords) {
+  el.resultCard.style.display = 'block';
+  el.resultCard.className = 'result-card' + (belowThreshold ? ' warn' : '');
+
+  if (belowThreshold) {
+    el.resultInner.innerHTML = `
+      <div class="result-title warn">Not sure — ask a person</div>
+      <div class="result-body">Confidence is too low (${Math.round(prediction.confidence * 100)}%) to give a reliable diagnosis. Show this leaf to your extension officer instead.</div>`;
+    return;
+  }
+
+  const name = info ? info.name_en : prediction.predictedClass;
+  const description = info ? info.description_en : '';
+  const action = info ? info.recommended_action : '';
+
+  el.resultInner.innerHTML = `
+    <div class="result-title">${name}</div>
+    <div class="confidence">${Math.round(prediction.confidence * 100)}% confidence</div>
+    <div class="result-body">${description}</div>
+    <div class="action-box">
+      <div class="action-header">
+        <span class="action-label">Recommended action</span>
+        <button class="listen-btn" id="listenBtn" type="button">🔊 Listen</button>
+      </div>
+      <div class="result-body">${action}</div>
+    </div>
+    ${coords ? `<div class="gps-note">📍 ${coords.lat.toFixed(4)}, ${coords.lon.toFixed(4)}</div>` : ''}
+  `;
+
+  const listenBtn = document.getElementById('listenBtn');
+  if (listenBtn && 'speechSynthesis' in window) {
+    listenBtn.onclick = () => {
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(action);
+      utter.lang = 'en-US';
+      window.speechSynthesis.speak(utter);
+    };
+  } else if (listenBtn) {
+    listenBtn.style.display = 'none';
+  }
+}
+
+async function saveAndSync(prediction, belowThreshold, coords) {
+  const row = {
+    id: uuidv4(),
+    crop_id: cropId,
+    captured_at: new Date().toISOString(),
+    model_version: MODEL_VERSION,
+    predicted_class: prediction.predictedClass,
+    confidence: prediction.confidence,
+    top3_json: prediction.classProbabilities,
+    below_threshold: belowThreshold,
+    gps_lat: coords?.lat ?? null,
+    gps_lon: coords?.lon ?? null,
+  };
+  const { error } = await supabase.from('observations').upsert([row], { onConflict: 'id' });
+  el.syncNote.textContent = error
+    ? 'Saved on this device only — could not reach the cooperative server.'
+    : 'Synced to the cooperative dashboard.';
+}
+
+async function init() {
+  el.status.textContent = 'Loading on-device model…';
+
+  // Prefer WebGL (GPU-accelerated, sub-second inference) and fall back to
+  // the plain CPU backend only if WebGL genuinely isn't available (some
+  // headless/automated browser contexts) — CPU still works, just slower.
+  try {
+    await tf.setBackend('webgl');
+  } catch {
+    await tf.setBackend('cpu');
+  }
+  await tf.ready();
+
+  const [backboneModel, coffeeHead, cassavaHead, beanHead, diseaseRes] = await Promise.all([
+    tf.loadGraphModel('assets/model/backbone/model.json'),
+    fetch('assets/model/coffee_head.json').then((r) => r.json()),
+    fetch('assets/model/cassava_head.json').then((r) => r.json()),
+    fetch('assets/model/bean_head.json').then((r) => r.json()),
+    supabase.from('disease_classes').select('*'),
+  ]);
+
+  backbone = backboneModel;
+  heads = { coffee: coffeeHead, cassava: cassavaHead, bean: beanHead };
+  diseaseById = {};
+  for (const d of diseaseRes.data || []) diseaseById[`${d.crop_id}:${d.id}`] = d;
+
+  renderCrops();
+  el.status.textContent = 'Model loaded — pick a crop and a leaf photo.';
+
+  el.dropZone.onclick = () => el.fileInput.click();
+  el.fileInput.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const img = await loadImageFile(file);
+    await classify(img);
+  };
+  ['dragover', 'dragleave', 'drop'].forEach((evt) =>
+    el.dropZone.addEventListener(evt, (e) => {
+      e.preventDefault();
+      el.dropZone.classList.toggle('drag', evt === 'dragover');
+    }),
+  );
+  el.dropZone.addEventListener('drop', async (e) => {
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    const img = await loadImageFile(file);
+    await classify(img);
+  });
+
+  el.sampleBtn.onclick = async () => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => classify(img);
+    img.src = `assets/samples/${cropId}_sample.jpg`;
+  };
+}
+
+init().catch((err) => {
+  el.status.textContent = `Failed to load: ${err.message}`;
+  console.error(err);
+});
+</script>
+</body>
+</html>
